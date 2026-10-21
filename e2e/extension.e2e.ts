@@ -79,8 +79,10 @@ const context = await chromium.launchPersistentContext(join(tmp, 'profile'), {
 });
 
 const listCalls: string[] = [];
+let apiCalls = 0;
 await context.route('https://claude.ai/**', (route: Route) => {
   const url = new URL(route.request().url());
+  if (url.pathname.startsWith('/api/')) apiCalls++;
   const json = (body: unknown, status = 200) =>
     route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
 
@@ -173,13 +175,13 @@ await check('the program sees the browser in "browsers"', async () => {
   assert.ok(line.endsWith(`extension ${EXTENSION_VERSION}`), line);
 });
 
-await check('a wrong token is explained on both sides', async () => {
+await check('a wrong token: the extension won\'t trust the program, and both sides say why', async () => {
   await setStorage({ token: 'f'.repeat(32) });
   await waitFor(/! rejected: chrome tried to connect with a different pairing token/);
   const { label, detail, popup } = await popupSays();
   await popup.close();
-  assert.equal(label, 'Pairing token rejected');
-  assert.match(detail, /copy it again from the program/);
+  assert.equal(label, 'Couldn\'t verify the program');
+  assert.match(detail, /Copy the token again from the program/);
 
   await setStorage({ token });
   await waitFor(/\+ browser connected: chrome/);
@@ -196,12 +198,20 @@ await check('after the program restarts, the extension is back within the 5 s re
   console.log(`  (reconnected in ${(took / 1000).toFixed(1)} s)`);
 });
 
-// a stand-in program that refuses with a given protocol, like an older or newer release would
-async function withMismatch(protocol: number, fn: () => Promise<void>): Promise<void> {
+// something else listening on the program's port: an older or newer release, or an impostor.
+// Records everything the extension sends it.
+async function withFakeProgram(
+  onHello: (ws: import('ws').WebSocket) => void,
+  fn: (received: string[]) => Promise<void>
+): Promise<void> {
+  const received: string[] = [];
   const server = new WebSocketServer({ host: '127.0.0.1', port: PORT });
-  server.on('connection', ws => ws.once('message', () => ws.close(CloseCode.ProtocolMismatch, mismatchReason(protocol))));
+  server.on('connection', ws => {
+    ws.on('message', raw => received.push(String(raw)));
+    ws.once('message', () => onHello(ws));
+  });
   try {
-    await fn();
+    await fn(received);
   } finally {
     for (const ws of server.clients) ws.terminate();
     await new Promise(resolve => server.close(resolve));
@@ -211,18 +221,61 @@ async function withMismatch(protocol: number, fn: () => Promise<void>): Promise<
 await check('a version mismatch tells the user which side to update', async () => {
   await stopCli();
 
-  await withMismatch(0, async () => {
-    const { label, detail, popup } = await popupSays();
-    await popup.close();
-    assert.equal(label, 'Update needed');
-    assert.match(detail, /program is older than this extension/);
-  });
+  await withFakeProgram(
+    ws => ws.close(CloseCode.ProtocolMismatch, mismatchReason(0)),
+    async () => {
+      const { label, detail, popup } = await popupSays();
+      await popup.close();
+      assert.equal(label, 'Update needed');
+      assert.match(detail, /program is older than this extension/);
+    }
+  );
 
-  await withMismatch(99, async () => {
-    const { detail, popup } = await popupSays();
-    await popup.close();
-    assert.match(detail, /extension is older than the program/);
-  });
+  await withFakeProgram(
+    ws => ws.close(CloseCode.ProtocolMismatch, mismatchReason(99)),
+    async () => {
+      const { detail, popup } = await popupSays();
+      await popup.close();
+      assert.match(detail, /extension is older than the program/);
+    }
+  );
+
+  // a 0.1.x program: it wants the token in the hello, doesn't get it, and refuses
+  await withFakeProgram(
+    ws => ws.close(CloseCode.BadToken, 'bad token'),
+    async () => {
+      const { label, detail, popup } = await popupSays();
+      await popup.close();
+      assert.equal(label, 'Update needed');
+      assert.match(detail, /program is older than this extension/);
+    }
+  );
+});
+
+await check('an impostor on the port gets nothing: no token, no proof, no chats', async () => {
+  const callsBefore = apiCalls;
+  await withFakeProgram(
+    ws => {
+      // a request straight away, in case the extension answers before checking anything
+      ws.send(JSON.stringify({ type: 'request', id: 'early', op: 'list', offset: 0, limit: 10 }));
+      // a forged challenge: it can't compute a real proof without the token
+      ws.send(JSON.stringify({ type: 'challenge', nonce: 'c'.repeat(64), proof: 'd'.repeat(64) }));
+      ws.send(JSON.stringify({ type: 'welcome', clientId: 'fake' }));
+      ws.send(JSON.stringify({ type: 'request', id: 'late', op: 'conversation', conversationId: conversation.uuid }));
+    },
+    async received => {
+      const { label, detail, popup } = await popupSays();
+      await popup.close();
+      assert.equal(label, 'Couldn\'t verify the program');
+      assert.match(detail, /another app is using that port/);
+
+      assert.ok(received.length > 0, 'the extension did try to connect');
+      assert.deepEqual([...new Set(received.map(r => JSON.parse(r).type))], ['hello']);
+      assert.ok(received.every(r => !r.includes(token)), 'the token was sent');
+      assert.equal(apiCalls, callsBefore, 'claude.ai was queried for the impostor');
+      console.log(`  (${received.length} hello${received.length > 1 ? 's' : ''} sent, nothing else)`);
+    }
+  );
 });
 
 await check('opening the popup reconnects at once, even after a refusal', async () => {

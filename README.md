@@ -126,7 +126,7 @@ handy for debugging.
 ### Tests
 
 ```sh
-npm test          # unit tests: core (27) + companion (38)
+npm test          # unit tests for every package
 npm run typecheck # all packages + e2e
 npm run e2e       # needs Playwright's Chromium: npx playwright install chromium
 ```
@@ -168,13 +168,26 @@ systems, and creates a **draft** release with checksums. After it finishes:
 
 ## Security model
 
-- The program only listens on `127.0.0.1`.
-- It accepts connections only from extension origins (web pages can't fake `Origin`), and only with the pairing
-  token (which stops other extensions). Verified on the compiled binary too, not only under Node.
-- The extension checks that a session exists but never reads or sends its value.
+The extension and the program prove to each other that they hold the same pairing token, and **the program
+goes first**: the extension serves nothing to whatever is listening on the port until it has checked. Each side
+sends a random nonce and gets back an HMAC-SHA256 of both nonces keyed with the token. The token itself never
+crosses the connection. The two proofs carry different labels (`program` / `extension`), so one can't be
+bounced back as the other, and fresh nonces make recorded proofs useless.
+
+- The program only listens on `127.0.0.1`, and refuses web pages (by `Origin`, which browsers don't let pages
+  fake) before the handshake even starts.
+- The extension checks that a claude.ai session exists but never reads or sends its value.
 - The extension performs two read-only requests and nothing else, with validated parameters: even a compromised
   program can't make it delete, post or read anything other than your chat list and chats.
-- File names from conversations are sanitized so a file can't be written outside its export folder.
+- Exports are private to your user account (folders `0700`, files `0600`), and file names from conversations
+  are sanitized so nothing can be written outside its export folder.
+
+What this protects against: other user accounts on the same computer, sandboxed apps, and anything that takes
+the port while the program isn't running. What it can't protect against: software already running as *your*
+user, which can read the token file and your browser's cookies directly. Nothing at this level can.
+
+Versions 0.1.x sent the token in plain text to whatever was listening on the port, without checking it was the
+program. Fixed in 0.2.0: update both the extension and the program.
 
 ## API notes
 

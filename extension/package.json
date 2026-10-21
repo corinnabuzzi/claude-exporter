@@ -1,6 +1,6 @@
 {
   "name": "@claude-exporter/extension",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "description": "Browser side: fetches claude.ai JSON with the user's session, nothing else",
@@ -13,7 +13,7 @@
     "typecheck": "tsc -p ."
   },
   "dependencies": {
-    "@claude-exporter/protocol": "0.1.0"
+    "@claude-exporter/protocol": "0.2.0"
   },
   "devDependencies": {
     "@types/chrome": "0.3.6",

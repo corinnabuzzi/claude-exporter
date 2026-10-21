@@ -3,8 +3,12 @@ import {
   DEFAULT_PORT,
   PROTOCOL_VERSION,
   UUID_RE,
+  createNonce,
+  isNonce,
+  makeProof,
   parseMessage,
   parseMismatchReason,
+  verifyProof,
   type Account,
   type ErrorCode,
   type ExtensionMessage,
@@ -20,7 +24,10 @@ const MAX_PAGE = 100;
 // while the worker is awake; once the browser suspends it, only the 30 s alarm or the popup wake it
 const MAX_RETRY_DELAY = 5_000;
 
-export type State = 'idle' | 'connecting' | 'connected' | 'offline' | 'rejected' | 'outdated';
+export type State = 'idle' | 'connecting' | 'connected' | 'offline' | 'rejected' | 'outdated' | 'unverified';
+
+// states that need the user to do something: no automatic retries, only the popup or a new token
+const STUCK: ReadonlySet<State> = new Set(['rejected', 'outdated', 'unverified']);
 
 class ApiError extends Error {
   code: ErrorCode;
@@ -30,14 +37,26 @@ class ApiError extends Error {
   }
 }
 
-let ws: WebSocket | null = null;
+// one per connection attempt; nothing is served until the program has proven it holds the token
+interface Session {
+  sock: WebSocket;
+  port: number;
+  token: string;
+  nonce: string;
+  programVerified: boolean;
+  programFailed: boolean;
+  welcomed: boolean;
+  queue: Promise<void>;
+}
+
+let session: Session | null = null;
 let starting = false;
 let state: State = 'idle';
 let detail = '';
-let account: Account | null = null;
 let pingTimer: ReturnType<typeof setInterval> | undefined;
 let retryTimer: ReturnType<typeof setTimeout> | undefined;
 let retryDelay = 1_000;
+let lastAccount: Account | null = null;
 
 function setState(next: State, info = ''): void {
   state = next;
@@ -45,7 +64,8 @@ function setState(next: State, info = ''): void {
   const badges: Partial<Record<State, [string, string]>> = {
     connected: ['✓', '#2e7d32'],
     rejected: ['!', '#c62828'],
-    outdated: ['!', '#c62828']
+    outdated: ['!', '#c62828'],
+    unverified: ['!', '#c62828']
   };
   const [text, color] = badges[next] ?? ['', '#000000'];
   void chrome.action.setBadgeText({ text });
@@ -58,16 +78,16 @@ function send(sock: WebSocket, message: ExtensionMessage): void {
 
 // logged in = a session cookie exists; its value is never read or sent anywhere
 async function readAccount(): Promise<Account | null> {
-  const [session, org] = await Promise.all([
+  const [cookie, org] = await Promise.all([
     chrome.cookies.get({ url: BASE, name: 'sessionKey' }),
     chrome.cookies.get({ url: BASE, name: 'lastActiveOrg' })
   ]);
-  if (!session || !org?.value || !UUID_RE.test(org.value)) return null;
+  if (!cookie || !org?.value || !UUID_RE.test(org.value)) return null;
   return { orgId: org.value };
 }
 
 async function connect(): Promise<void> {
-  if (starting || ws) return;
+  if (starting || session) return;
   starting = true;
   clearTimeout(retryTimer);
 
@@ -77,34 +97,54 @@ async function connect(): Promise<void> {
     const token = typeof stored.token === 'string' ? stored.token : '';
     if (!token) return setState('idle', 'no pairing token yet');
 
-    account = await readAccount();
     setState('connecting');
+    const s: Session = {
+      sock: new WebSocket(`ws://127.0.0.1:${port}`),
+      port,
+      token,
+      nonce: createNonce(),
+      programVerified: false,
+      programFailed: false,
+      welcomed: false,
+      queue: Promise.resolve()
+    };
+    session = s;
 
-    const sock = new WebSocket(`ws://127.0.0.1:${port}`);
-    ws = sock;
-    sock.onopen = () =>
-      send(sock, {
+    // no token here: whatever is listening has to prove it already knows it
+    s.sock.onopen = () =>
+      send(s.sock, {
         type: 'hello',
         protocol: PROTOCOL_VERSION,
-        token,
+        nonce: s.nonce,
         browser: BROWSER,
-        extensionVersion: chrome.runtime.getManifest().version,
-        account
+        extensionVersion: chrome.runtime.getManifest().version
       });
-    sock.onmessage = e => void onMessage(sock, String(e.data));
-    sock.onclose = e => onClose(sock, e.code, e.reason);
+    s.sock.onmessage = e => {
+      s.queue = s.queue.then(() => onMessage(s, String(e.data))).catch(() => s.sock.close());
+    };
+    s.sock.onclose = e => onClose(s, e.code, e.reason);
   } finally {
     starting = false;
   }
 }
 
-function onClose(sock: WebSocket, code: number, reason: string): void {
-  if (ws !== sock) return;
-  ws = null;
+function onClose(s: Session, code: number, reason: string): void {
+  if (session !== s) return;
+  session = null;
   clearInterval(pingTimer);
 
+  if (s.programFailed) {
+    return setState(
+      'unverified',
+      `whatever answered on port ${s.port} couldn't prove it has this token. Copy the token again from the program. ` +
+        `If the program isn't running, another app is using that port.`
+    );
+  }
   if (code === CloseCode.BadToken) {
-    return setState('rejected', 'the token doesn\'t match: copy it again from the program');
+    // a protocol 1 program rejects our token-less hello before proving anything
+    return s.programVerified
+      ? setState('rejected', 'the token doesn\'t match: copy it again from the program')
+      : setState('outdated', 'the program is older than this extension: download the latest program');
   }
   if (code === CloseCode.ProtocolMismatch) {
     const theirs = parseMismatchReason(reason);
@@ -125,34 +165,55 @@ function onClose(sock: WebSocket, code: number, reason: string): void {
 function reconnect(): void {
   retryDelay = 1_000;
   clearInterval(pingTimer);
-  if (ws) {
-    const old = ws;
-    ws = null;
-    old.close(1000, 'reconnecting');
+  if (session) {
+    const old = session;
+    session = null;
+    old.sock.close(1000, 'reconnecting');
   }
   void connect();
 }
 
-async function onMessage(sock: WebSocket, raw: string): Promise<void> {
+async function onMessage(s: Session, raw: string): Promise<void> {
   const msg = parseMessage(raw);
   if (!msg) return;
 
-  if (msg.type === 'welcome') {
-    retryDelay = 1_000;
-    setState('connected');
-    // traffic on the socket keeps the Chrome service worker alive
-    pingTimer = setInterval(() => send(sock, { type: 'ping' }), PING_INTERVAL);
+  if (msg.type === 'challenge') {
+    if (s.programVerified || s.programFailed) return;
+    const valid =
+      isNonce(msg.nonce) && (await verifyProof(s.token, 'program', s.nonce, msg.nonce, msg.proof));
+    if (!valid) {
+      s.programFailed = true;
+      return s.sock.close(CloseCode.ProgramUnverified, 'program not verified');
+    }
+    s.programVerified = true;
+    lastAccount = await readAccount();
+    send(s.sock, {
+      type: 'proof',
+      proof: await makeProof(s.token, 'extension', s.nonce, msg.nonce as string),
+      account: lastAccount
+    });
     return;
   }
 
-  if (msg.type === 'request' && typeof msg.id === 'string') {
+  // everything below needs a program that proved itself and accepted our proof
+  if (msg.type === 'welcome') {
+    if (!s.programVerified) return;
+    s.welcomed = true;
+    retryDelay = 1_000;
+    setState('connected');
+    // traffic on the socket keeps the Chrome service worker alive
+    pingTimer = setInterval(() => send(s.sock, { type: 'ping' }), PING_INTERVAL);
+    return;
+  }
+
+  if (msg.type === 'request' && s.welcomed && typeof msg.id === 'string') {
     const id = msg.id;
     try {
       const { via, result } = await perform(msg as unknown as Operation);
-      send(sock, { type: 'response', id, ok: true, via, result });
+      send(s.sock, { type: 'response', id, ok: true, via, result });
     } catch (err) {
       const code = err instanceof ApiError ? err.code : 'unreachable';
-      send(sock, { type: 'response', id, ok: false, code, error: (err as Error).message });
+      send(s.sock, { type: 'response', id, ok: false, code, error: (err as Error).message });
     }
   }
 }
@@ -234,9 +295,9 @@ async function pageGet(path: string): Promise<{ data?: unknown; error?: string }
 
 async function refreshAccount(): Promise<void> {
   const next = await readAccount();
-  if (next?.orgId === account?.orgId) return;
-  account = next;
-  if (ws && state === 'connected') send(ws, { type: 'account', account });
+  if (next?.orgId === lastAccount?.orgId) return;
+  lastAccount = next;
+  if (session?.welcomed) send(session.sock, { type: 'account', account: next });
 }
 
 chrome.cookies.onChanged.addListener(({ cookie }) => {
@@ -260,7 +321,7 @@ chrome.runtime.onMessage.addListener((msg: { type?: string }, _sender, reply) =>
   }
   // the popup opening is the user saying "now": skip whatever backoff or alarm is pending
   if (msg.type === 'wake') {
-    if (!ws) {
+    if (!session) {
       retryDelay = 1_000;
       void connect();
     }
@@ -270,7 +331,7 @@ chrome.runtime.onMessage.addListener((msg: { type?: string }, _sender, reply) =>
 });
 
 chrome.alarms.onAlarm.addListener(alarm => {
-  if (alarm.name === 'reconnect' && state !== 'rejected' && state !== 'outdated') void connect();
+  if (alarm.name === 'reconnect' && !STUCK.has(state)) void connect();
 });
 
 void chrome.alarms.get('reconnect').then(existing => {

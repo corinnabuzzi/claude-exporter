@@ -1,0 +1,7 @@
+# makepkg downloads and builds here: only the recipe belongs in git
+*
+!.gitignore
+!PKGBUILD
+!.SRCINFO
+!README.md
+!update.sh

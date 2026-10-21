@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, readdir } from 'node:fs/promises';
+import { chmod, mkdtemp, readFile, readdir, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Conversation } from '@claude-exporter/core';
@@ -54,4 +54,37 @@ test('saveRaw: false skips the json', async () => {
   const out = await mkdtemp(join(tmpdir(), 'export-'));
   const { dir } = await writeExport(conversation, out, { saveRaw: false });
   assert.ok(!(await readdir(dir)).includes('conversation.json'));
+});
+
+const mode = async (path: string) => (await stat(path)).mode & 0o777;
+const unix = process.platform !== 'win32';
+
+test('exports are readable only by their owner', { skip: !unix && 'POSIX permissions' }, async () => {
+  const out = join(await mkdtemp(join(tmpdir(), 'export-')), 'claude-exports');
+  const { dir, markdownPath, filePaths } = await writeExport(conversation, out);
+
+  assert.equal(await mode(out), 0o700, 'the exports folder, when we create it');
+  assert.equal(await mode(dir), 0o700);
+  assert.equal(await mode(join(dir, 'files')), 0o700);
+  for (const file of [markdownPath, join(dir, 'conversation.json'), ...filePaths]) {
+    assert.equal(await mode(file), 0o600, file);
+  }
+});
+
+test('re-exporting tightens files written by an older version', { skip: !unix && 'POSIX permissions' }, async () => {
+  const out = await mkdtemp(join(tmpdir(), 'export-'));
+  const { dir, markdownPath } = await writeExport(conversation, out);
+  await chmod(dir, 0o755);
+  await chmod(markdownPath, 0o644);
+
+  await writeExport(conversation, out);
+  assert.equal(await mode(dir), 0o700);
+  assert.equal(await mode(markdownPath), 0o600);
+});
+
+test('an exports folder that already exists keeps the permissions the user gave it', { skip: !unix && 'POSIX permissions' }, async () => {
+  const out = await mkdtemp(join(tmpdir(), 'export-'));
+  await chmod(out, 0o750);
+  await writeExport(conversation, out);
+  assert.equal(await mode(out), 0o750);
 });

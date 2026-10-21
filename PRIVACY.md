@@ -1,6 +1,6 @@
 # Privacy policy
 
-*Chat Exporter for Claude: browser extension and companion program. Last updated: 21 October 2026.*
+*Chat Exporter for Claude: browser extension and companion program. Last updated: 21 October 2026 (version 0.2.0).*
 
 Chat Exporter for Claude is an independent project. It is not made by, affiliated with, or endorsed by Anthropic.
 
@@ -21,8 +21,9 @@ no account, no analytics, and no tracking.
 ## Where the data goes
 
 - **Only to the Chat Exporter for Claude program on the same computer**, over a connection to `127.0.0.1` (your own
-  machine). That connection only works from the extension, and only after you pair it with the program using a
-  token the program shows you.
+  machine). You pair the two once with a token the program shows you. Every time they connect, the program has to
+  prove it knows that token before the extension sends it anything, and the token itself is never sent. Another
+  app on your computer can't pose as the program. Versions before 0.2.0 didn't do this check: please update.
 - **Nothing is sent to the developer or to any third party.** The extension and the program contain no
   analytics, telemetry, crash reporting, or advertising.
 
@@ -31,7 +32,8 @@ no account, no analytics, and no tracking.
 - **In the extension**: the pairing token and port number, in the browser's local extension storage.
 - **By the program**: the pairing token, in `~/.config/claude-exporter/token`.
 - **Your exports**: in the folder you choose (by default `~/claude-exports`), as Markdown, the files Claude
-  created, and the raw conversation data. They stay there until you delete them.
+  created, and the raw conversation data. They're readable only by your user account, and they stay there until
+  you delete them.
 
 Uninstalling the extension removes what it stored. Deleting the program, its config folder and your exports
 folder removes everything else.

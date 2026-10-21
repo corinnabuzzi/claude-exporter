@@ -8,7 +8,8 @@ const LABELS: Record<State, string> = {
   connected: 'Connected to the program',
   offline: 'Program not reachable',
   rejected: 'Pairing token rejected',
-  outdated: 'Update needed'
+  outdated: 'Update needed',
+  unverified: 'Couldn\'t verify the program'
 };
 
 function $<T extends HTMLElement = HTMLElement>(id: string): T {
