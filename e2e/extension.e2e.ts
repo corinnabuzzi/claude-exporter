@@ -31,7 +31,7 @@ const tmp = await mkdtemp(join(tmpdir(), 'claude-exporter-e2e-'));
 const out = join(tmp, 'out');
 
 // ---- companion
-const cli = spawn('node', [join(root, 'companion/src/cli.ts'), '--port', String(PORT), '--out', out], {
+const cli = spawn('node', [join(root, 'companion/src/repl.ts'), '--port', String(PORT), '--out', out], {
   env: { ...process.env, XDG_CONFIG_HOME: join(tmp, 'config') }
 });
 let log = '';

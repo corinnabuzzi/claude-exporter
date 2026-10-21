@@ -13,7 +13,8 @@ companion/   the program: pairs with browsers, lists, exports to disk
 e2e/         full pipeline test with a real Chromium
 ```
 
-Requires Node 22.18+ (TypeScript runs directly; only the extension has a build step).
+Requires Node 22.18+. TypeScript runs directly; the TUI's `.tsx` goes through `tsx`; only the extension has a
+build step.
 
 ## Run it
 
@@ -41,18 +42,32 @@ imparare_c-4da0e155/
   conversation.json      raw API data, to re-render later without fetching again
 ```
 
-## Commands
+## Keys
 
-```
-list [n|all]     recent conversations (default 20)
-export <target>  a number from the list, a chat URL, or an id; pasting a URL alone works too
-browsers         connected browsers (→ = the one in use)
-use <id>         pick a browser
-quit
-```
+`npm start` opens the TUI full screen. Until a browser connects it shows the pairing token; once a logged-in
+browser is there, your chats load by themselves.
 
-Several browsers can be connected at once. Requests go to the one picked with `use`, otherwise to the newest
-one that's logged in.
+| key | |
+|---|---|
+| `↑` `↓` / `j` `k` | move · `PgUp` `PgDn`, `Home`/`g`, `End`/`G` jump |
+| `space` | select the chat under the cursor |
+| `a` | select / unselect everything visible (works on search results) |
+| `enter` | export the selection, or the chat under the cursor if nothing is selected |
+| `/` | search title, project and summary as you type; `enter` keeps the filter, `esc` clears it |
+| `esc` | clear the filter, then the selection |
+| `r` | reload the list |
+| `b` | switch browser, when more than one is connected |
+| `q` | quit (asks twice while exports are running) |
+
+Exports run one at a time in the background: `·` queued, spinner running, `✓` done (yellow if a file has
+warnings), `✗` failed; put the cursor on a failed one to see why. After quitting, the exported folders are
+listed in the terminal.
+
+Several browsers can be connected at once. Requests go to the one picked with `b`, otherwise to the newest one
+that's logged in.
+
+`npm run repl -w companion` starts a line-mode version instead (`list`, `export <n|url>`, `browsers`, `use`),
+handy for scripting and debugging.
 
 ## Security model
 
@@ -67,14 +82,15 @@ one that's logged in.
 ## Tests
 
 ```sh
-npm test          # unit tests: core (27) + companion (17)
+npm test          # unit tests: core (27) + companion (38)
 npm run typecheck # all packages + e2e
 npm run e2e       # needs Playwright's Chromium: npx playwright install chromium
 ```
 
 - **core**: synthetic conversations, one behaviour per test, plus golden tests on real chats.
 - **companion**: the hub against fake browsers (security checks, several browsers, routing, disconnects,
-  timeouts), paging (server page caps, offsets ignored, duplicates), and writing to disk.
+  timeouts), paging (server page caps, offsets ignored, duplicates), writing to disk, the TUI reducer as pure
+  functions, and the TUI itself driven by keystrokes against a fake backend.
 - **e2e**: the built extension in Chromium talks to the real CLI; a fake claude.ai serves a real conversation.
   Checks the exported dispensa file is byte-identical to the one Claude delivered.
 

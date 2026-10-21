@@ -6,6 +6,7 @@ export interface ListOptions {
   max?: number;
   pageSize?: number;
   delayMs?: number;
+  onProgress?: (count: number) => void;
 }
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -19,7 +20,7 @@ function readPage(raw: unknown): { items: ConversationSummary[]; hasMore: boolea
 // stops on has_more: false, an empty page, or a page with nothing new,
 // so an endpoint that ignores offset can't loop forever
 export async function listConversations(fetchPage: FetchPage, options: ListOptions = {}): Promise<ConversationSummary[]> {
-  const { max = Infinity, pageSize = 50, delayMs = 250 } = options;
+  const { max = Infinity, pageSize = 50, delayMs = 250, onProgress } = options;
   const seen = new Set<string>();
   const out: ConversationSummary[] = [];
   let offset = 0;
@@ -38,6 +39,7 @@ export async function listConversations(fetchPage: FetchPage, options: ListOptio
       if (out.length >= max) break;
     }
 
+    onProgress?.(out.length);
     if (added === 0 || hasMore === false) break;
     // without has_more, a short page is the only end signal; with it, a short page may just be a server cap
     if (hasMore === undefined && items.length < limit) break;
