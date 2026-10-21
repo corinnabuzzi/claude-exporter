@@ -26,11 +26,16 @@ It picks the right build for your system, checks it against the release's checks
 says what to add. To pin a version, put `CLAUDE_EXPORTER_VERSION=0.1.0` in front of `sh`; to install elsewhere,
 `CLAUDE_EXPORTER_INSTALL_DIR=…`.
 
-**Arch Linux**, from the AUR, updated with the rest of your system:
+**Arch Linux**, as a pacman package, so it updates with the rest of your system. It's going on the AUR as
+`claude-exporter-bin` (new AUR accounts are paused right now). Until then, build the same package from this repo:
 
 ```sh
-yay -S claude-exporter-bin
+git clone https://github.com/corinnabuzzi/claude-exporter.git
+cd claude-exporter/packaging/aur
+makepkg -si
 ```
+
+To update, run `git pull` in that folder, then `makepkg -si` again.
 
 **Windows**, or by hand: download the file for your system from
 [Releases](https://github.com/corinnabuzzi/claude-exporter/releases). On Windows, SmartScreen may warn about an
@@ -52,7 +57,7 @@ outdated extension or program), both the program and the popup say what to do.
 ### Uninstall
 
 Remove the extension from the browser, then the program: `rm ~/.local/bin/claude-exporter` (or
-`yay -R claude-exporter-bin`), plus `~/.config/claude-exporter` for the pairing token. Your exports stay in
+`sudo pacman -R claude-exporter-bin`), plus `~/.config/claude-exporter` for the pairing token. Your exports stay in
 `~/claude-exports` until you delete them.
 
 Exports go to `~/claude-exports/` (`--out <dir>` to change), one folder per chat:

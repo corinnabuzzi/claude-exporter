@@ -96,7 +96,8 @@ esac
 
 if [ -f /etc/arch-release ]; then
   say ""
-  say "tip: on Arch, the AUR package keeps it updated with the rest of the system: yay -S $NAME-bin"
+  say "tip: on Arch, you can install it as a pacman package instead, so it updates with your system:"
+  say "  https://github.com/$REPO#install"
 fi
 
 say ""
