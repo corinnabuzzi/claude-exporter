@@ -1,6 +1,6 @@
 {
   "name": "@claude-exporter/extension",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "type": "module",
   "description": "Browser side: fetches claude.ai JSON with the user's session, nothing else",
@@ -19,6 +19,6 @@
     "@types/chrome": "0.3.6",
     "esbuild": "0.28.2",
     "typescript": "7.0.2",
-    "web-ext": "10.8.0"
+    "web-ext": "^10.8.0"
   }
 }

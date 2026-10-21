@@ -18,6 +18,7 @@ const EXT = join(root, 'extension/dist/chrome');
 const PORT = 47901;
 const ORG = '11111111-2222-3333-4444-555555555555';
 const { WebSocketServer } = createRequire(join(root, 'companion/package.json'))('ws') as typeof import('ws');
+const EXTENSION_VERSION: string = JSON.parse(await readFile(join(root, 'extension/package.json'), 'utf8')).version;
 
 if (!existsSync(join(fixtures, 'imparare-c.json'))) {
   console.log('skipped: private fixtures missing');
@@ -168,7 +169,8 @@ await check('logging out is noticed, and exports then fail clearly', async () =>
 
 await check('the program sees the browser in "browsers"', async () => {
   send('browsers');
-  await waitFor(/→ chrome \[[0-9a-f]+\] \(not logged in\) · extension 0\.1\.0/);
+  const line = await waitFor(/→ chrome \[[0-9a-f]+\] \(not logged in\) · extension \S+/);
+  assert.ok(line.endsWith(`extension ${EXTENSION_VERSION}`), line);
 });
 
 await check('a wrong token is explained on both sides', async () => {
