@@ -2,8 +2,8 @@ import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
 import WebSocket from 'ws';
-import { CloseCode, PROTOCOL_VERSION, type Account } from '@claude-exporter/protocol';
-import { Hub, HubError } from '../src/hub.ts';
+import { CloseCode, PROTOCOL_VERSION, parseMismatchReason, type Account } from '@claude-exporter/protocol';
+import { Hub, HubError, type Rejection } from '../src/hub.ts';
 
 const TOKEN = 'a'.repeat(32);
 const hub = await Hub.start({ token: TOKEN, port: 0, requestTimeout: 1_000 });
@@ -66,12 +66,22 @@ async function connect(browser: string, account: Account | null = { orgId: 'org-
   };
 }
 
+// waits for the hub to see the disconnect, not a fixed delay: under load that takes longer
+async function untilHub(check: () => boolean, timeout = 2_000): Promise<void> {
+  const start = Date.now();
+  while (!check()) {
+    if (Date.now() - start > timeout) throw new Error('hub never caught up');
+    await new Promise(r => setTimeout(r, 10));
+  }
+}
+
 async function closeAll(...browsers: FakeBrowser[]): Promise<void> {
   for (const b of browsers) {
     b.ws.close();
     await once(b.ws, 'close');
   }
-  await new Promise(r => setTimeout(r, 20));
+  const ids = new Set(browsers.map(b => b.clientId));
+  await untilHub(() => !hub.browsers().some(info => ids.has(info.id)));
 }
 
 test('refuses web pages, local scripts, wrong tokens and old extensions', async () => {
@@ -81,6 +91,29 @@ test('refuses web pages, local scripts, wrong tokens and old extensions', async 
   assert.equal(await attempt('moz-extension://1234', hello({ token: undefined })), `closed ${CloseCode.BadToken}`);
   assert.equal(await attempt('moz-extension://1234', hello({ protocol: 0 })), `closed ${CloseCode.ProtocolMismatch}`);
   assert.equal(await attempt('moz-extension://1234', hello()), 'welcome');
+});
+
+test('refusals are reported with a reason, and the close tells the extension our protocol', async () => {
+  const seen: Rejection[] = [];
+  const listener = (r: Rejection) => seen.push(r);
+  hub.on('rejected', listener);
+
+  await attempt('https://evil.example', hello());
+  await attempt('moz-extension://1234', hello({ token: 'nope', browser: 'firefox' }));
+
+  const reason = await new Promise<string>(resolve => {
+    const ws = open('moz-extension://1234');
+    ws.on('open', () => ws.send(JSON.stringify(hello({ protocol: 7, browser: 'firefox' }))));
+    ws.on('close', (_code, why) => resolve(String(why)));
+  });
+  hub.off('rejected', listener);
+
+  assert.deepEqual(seen, [
+    { kind: 'origin', origin: 'https://evil.example' },
+    { kind: 'token', origin: 'moz-extension://1234', browser: 'firefox' },
+    { kind: 'protocol', origin: 'moz-extension://1234', browser: 'firefox', theirs: 7, ours: PROTOCOL_VERSION }
+  ]);
+  assert.equal(parseMismatchReason(reason), PROTOCOL_VERSION);
 });
 
 test('two browsers stay connected side by side', async () => {
@@ -134,7 +167,7 @@ test('a browser that never answers times out', async () => {
 });
 
 test('with no browser, requests fail with a clear message', async () => {
-  await new Promise(r => setTimeout(r, 20));
+  await untilHub(() => hub.browsers().length === 0);
   await assert.rejects(hub.request({ op: 'list', offset: 0, limit: 1 }), (err: HubError) => err.code === 'no_browser');
 });
 

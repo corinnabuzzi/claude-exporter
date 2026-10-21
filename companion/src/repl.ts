@@ -5,6 +5,7 @@ import { startApp } from './app.ts';
 import { createBackend } from './backend.ts';
 import { shortDate, truncate } from './format.ts';
 import type { BrowserInfo } from './hub.ts';
+import { explainRejection } from './rejection.ts';
 
 const UUID_IN_TEXT = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
 
@@ -25,7 +26,7 @@ const describe = (b: BrowserInfo) => `${b.browser} [${b.id}]${b.account ? '' : '
 hub.on('connected', b => log(`+ browser connected: ${describe(b)}`));
 hub.on('disconnected', b => log(`- browser disconnected: ${describe(b)}`));
 hub.on('account', b => log(`~ ${b.browser} [${b.id}] ${b.account ? 'logged in' : 'logged out'}`));
-hub.on('rejected', reason => log(`! rejected connection: ${reason}`));
+hub.on('rejected', r => log(`! rejected: ${explainRejection(r) ?? `connection from ${r.origin}`}`));
 
 async function cmdList(arg: string | undefined): Promise<void> {
   const max = arg === 'all' ? Infinity : Number(arg) || 20;

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { render, cleanup } from 'ink-testing-library';
 import type { ConversationSummary } from '@claude-exporter/core';
 import type { Backend } from '../../src/backend.ts';
-import type { BrowserInfo } from '../../src/hub.ts';
+import type { BrowserInfo, Rejection } from '../../src/hub.ts';
 import type { WrittenExport } from '../../src/write.ts';
 import { App } from '../../src/tui/App.tsx';
 
@@ -26,6 +26,16 @@ class FakeBackend implements Backend {
   failing = new Set<string>();
   exported: string[] = [];
   #listeners = new Set<() => void>();
+  #rejectionListeners = new Set<(r: Rejection) => void>();
+
+  onRejected = (listener: (r: Rejection) => void) => {
+    this.#rejectionListeners.add(listener);
+    return () => this.#rejectionListeners.delete(listener);
+  };
+
+  reject(rejection: Rejection): void {
+    for (const listener of this.#rejectionListeners) listener(rejection);
+  }
 
   browsers = () => this.connected;
   active = () => this.connected.find(b => b.id === this.preferred) ?? this.connected.at(-1);
@@ -229,6 +239,57 @@ test('quitting during exports needs a second q', async () => {
   await press(KEY.enter, 'q');
   await waitFor(lastFrame, /press q again to quit/);
   release();
+});
+
+test('a refused browser is explained on the pairing screen, not silently ignored', async () => {
+  const { lastFrame, backend } = setup();
+  await waitFor(lastFrame, /No browser connected/);
+
+  backend.reject({ kind: 'token', origin: 'moz-extension://x', browser: 'firefox' });
+  await waitFor(lastFrame, /✗ firefox tried to connect with a different pairing token/);
+
+  backend.reject({ kind: 'protocol', origin: 'moz-extension://x', browser: 'firefox', theirs: 2, ours: 1 });
+  await waitFor(lastFrame, /extension in firefox is newer than this program/);
+
+  backend.reject({ kind: 'protocol', origin: 'moz-extension://x', browser: 'firefox', theirs: 0, ours: 1 });
+  await waitFor(lastFrame, /extension in firefox is older than this program/);
+});
+
+test('web pages probing the port are not shown: nothing for the user to do', async () => {
+  const { lastFrame, backend } = setup();
+  await waitFor(lastFrame, /No browser connected/);
+  backend.reject({ kind: 'origin', origin: 'https://evil.example' });
+  await tick(100);
+  assert.doesNotMatch(lastFrame() ?? '', /✗/);
+});
+
+test('the refusal message goes away once a browser does connect', async () => {
+  const { lastFrame, backend } = setup();
+  await waitFor(lastFrame, /No browser connected/);
+  backend.reject({ kind: 'token', origin: 'chrome-extension://x', browser: 'chrome' });
+  await waitFor(lastFrame, /different pairing token/);
+
+  await tick(5);
+  backend.connect('chrome');
+  const frame = await waitFor(lastFrame, /Imparare C/);
+  assert.doesNotMatch(frame, /pairing token/);
+});
+
+test('a second browser refused while one is connected shows up in the status line', async () => {
+  const backend = new FakeBackend();
+  backend.connect('chrome');
+  const { lastFrame } = setup(backend);
+  await waitFor(lastFrame, /Imparare C/);
+
+  backend.reject({ kind: 'token', origin: 'moz-extension://x', browser: 'firefox' });
+  await waitFor(lastFrame, /✗ firefox tried to connect with a different pairing token/);
+});
+
+test('the pairing screen says how long to wait and how to skip it', async () => {
+  const { lastFrame } = setup();
+  const frame = await waitFor(lastFrame, /No browser connected/);
+  assert.match(frame, /up to 30 seconds/);
+  assert.match(frame, /Clicking the extension icon connects it right away/);
 });
 
 test('narrow terminals drop the project column instead of breaking rows', async () => {

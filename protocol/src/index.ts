@@ -60,6 +60,16 @@ export type RequestMessage = { type: 'request'; id: string } & Operation;
 
 export type CompanionMessage = WelcomeMessage | RequestMessage;
 
+// sent as the close reason on ProtocolMismatch, so the extension knows which side is outdated
+export function mismatchReason(companionProtocol: number): string {
+  return `protocol ${companionProtocol}`;
+}
+
+export function parseMismatchReason(reason: string): number | null {
+  const n = Number(reason.match(/^protocol (\d+)$/)?.[1]);
+  return Number.isInteger(n) ? n : null;
+}
+
 export const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // shape check only: enough to route a message, not a full validator

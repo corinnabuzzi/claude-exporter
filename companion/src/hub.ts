@@ -5,6 +5,7 @@ import { WebSocketServer, type WebSocket } from 'ws';
 import {
   CloseCode,
   PROTOCOL_VERSION,
+  mismatchReason,
   parseMessage,
   type Account,
   type CompanionMessage,
@@ -28,11 +29,16 @@ export interface BrowserInfo {
   connectedAt: number;
 }
 
+export type Rejection =
+  | { kind: 'origin'; origin: string }
+  | { kind: 'token'; origin: string; browser: string }
+  | { kind: 'protocol'; origin: string; browser: string; theirs: number; ours: number };
+
 export interface HubEvents {
   connected: [BrowserInfo];
   disconnected: [BrowserInfo];
   account: [BrowserInfo];
-  rejected: [reason: string];
+  rejected: [Rejection];
 }
 
 export interface HubOptions {
@@ -94,7 +100,7 @@ export class Hub extends EventEmitter<HubEvents> {
         maxPayload: 200 * 1024 * 1024,
         verifyClient: (info, done) => {
           const ok = EXTENSION_ORIGIN.test(info.origin ?? '');
-          if (!ok) hub?.emit('rejected', `origin ${info.origin || '(none)'}`);
+          if (!ok) hub?.emit('rejected', { kind: 'origin', origin: info.origin || '(none)' });
           done(ok, 403);
         }
       });
@@ -168,13 +174,15 @@ export class Hub extends EventEmitter<HubEvents> {
 
       if (!client) {
         const hello = msg as unknown as HelloMessage;
+        const browser = String(hello.browser ?? 'a browser');
         if (msg.type !== 'hello' || !this.#tokenMatches(hello.token)) {
-          this.emit('rejected', `${origin}: wrong pairing token`);
+          this.emit('rejected', { kind: 'token', origin, browser });
           return ws.close(CloseCode.BadToken, 'bad token');
         }
         if (hello.protocol !== PROTOCOL_VERSION) {
-          this.emit('rejected', `${origin}: protocol ${hello.protocol}, expected ${PROTOCOL_VERSION}`);
-          return ws.close(CloseCode.ProtocolMismatch, 'protocol mismatch');
+          const theirs = Number(hello.protocol) || 0;
+          this.emit('rejected', { kind: 'protocol', origin, browser, theirs, ours: PROTOCOL_VERSION });
+          return ws.close(CloseCode.ProtocolMismatch, mismatchReason(PROTOCOL_VERSION));
         }
         clearTimeout(helloTimer);
         client = {

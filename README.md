@@ -10,15 +10,50 @@ Not affiliated with or endorsed by Anthropic.
 
 ## Install
 
-1. **The program**: download the file for your system from the [Releases](https://github.com/corinnabuzzi/claude-exporter/releases) page and make it
-   executable (`chmod +x claude-exporter-linux-x64`). Check it against `SHA256SUMS` if you like.
-   - macOS: the binary isn't signed, so the first launch is blocked. Run
-     `xattr -d com.apple.quarantine claude-exporter-darwin-*` once.
-   - Windows: SmartScreen may warn about an unknown publisher. Choose "More info" → "Run anyway".
-2. **The extension**: from the Chrome Web Store or Firefox Add-ons (links once published). Until then, see
-   *Development* below to load it by hand.
-3. Run the program. It shows a pairing token: open the extension's popup, paste it, Save & connect. This is
-   needed only once.
+You need two pieces: the **program**, which does the work, and the **browser extension**, which lets it read
+your chats.
+
+### 1. The program
+
+**Linux and macOS**, one line:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/corinnabuzzi/claude-exporter/main/install.sh | sh
+```
+
+It picks the right build for your system, checks it against the release's checksums, installs it to
+`~/.local/bin` (no sudo), and runs it once to make sure it works. If that folder isn't on your PATH yet, it
+says what to add. To pin a version, put `CLAUDE_EXPORTER_VERSION=0.1.0` in front of `sh`; to install elsewhere,
+`CLAUDE_EXPORTER_INSTALL_DIR=…`.
+
+**Arch Linux**, from the AUR, updated with the rest of your system:
+
+```sh
+yay -S claude-exporter-bin
+```
+
+**Windows**, or by hand: download the file for your system from
+[Releases](https://github.com/corinnabuzzi/claude-exporter/releases). On Windows, SmartScreen may warn about an
+unknown publisher: "More info" → "Run anyway".
+
+### 2. The extension
+
+From the Chrome Web Store or Firefox Add-ons (links once published). Until then, see *Development* below to
+load it by hand.
+
+### 3. Pair them, once
+
+Run `claude-exporter`. It shows a pairing token: open the extension's popup, paste it, Save & connect.
+
+From then on, the browser reconnects by itself, usually within a few seconds. A sleeping browser can take up to
+30 seconds, and clicking the extension icon skips the wait. If something is wrong (a different token, an
+outdated extension or program), both the program and the popup say what to do.
+
+### Uninstall
+
+Remove the extension from the browser, then the program: `rm ~/.local/bin/claude-exporter` (or
+`yay -R claude-exporter-bin`), plus `~/.config/claude-exporter` for the pairing token. Your exports stay in
+`~/claude-exports` until you delete them.
 
 Exports go to `~/claude-exports/` (`--out <dir>` to change), one folder per chat:
 
@@ -118,9 +153,13 @@ To publish: bump `version` in every `package.json`, commit, then tag and push:
 git tag v0.2.0 && git push origin v0.2.0
 ```
 
-The `release` workflow checks the tag against the package versions, runs the tests, builds everything and creates
-a **draft** release with checksums. Review it, publish it, then upload the two extension zips to the stores (see
-[STORE.md](STORE.md)).
+The `release` workflow checks the tag against the package versions, runs the tests, and builds everything. It
+signs the macOS builds on a Mac, launches the Linux, macOS (Apple Silicon) and Windows binaries on their own
+systems, and creates a **draft** release with checksums. After it finishes:
+
+1. Review the draft and publish it. `install.sh` only sees published releases.
+2. Upload the two extension zips to the stores (see [STORE.md](STORE.md)).
+3. Update the AUR package (see [packaging/aur/README.md](packaging/aur/README.md)).
 
 ## Security model
 

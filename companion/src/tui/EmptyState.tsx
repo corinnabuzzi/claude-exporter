@@ -2,7 +2,7 @@ import { Box, Text } from 'ink';
 import { Spinner } from './Spinner.tsx';
 
 export type EmptyKind =
-  | { kind: 'no-browser'; token: string; port: number }
+  | { kind: 'no-browser'; token: string; port: number; problem: string | null }
   | { kind: 'logged-out'; browser: string }
   | { kind: 'loading'; count: number }
   | { kind: 'error'; message: string }
@@ -14,16 +14,26 @@ export function EmptyState(props: EmptyKind) {
     case 'no-browser':
       return (
         <Box flexDirection="column" gap={1} paddingLeft={2}>
+          {props.problem && <Text color="red">✗ {props.problem}</Text>}
           <Text color="yellow">No browser connected.</Text>
           <Box flexDirection="column">
             <Text>1. Install the Chat Exporter for Claude extension in Chrome or Firefox</Text>
             <Text>2. Open its popup and paste this pairing token:</Text>
           </Box>
-          <Box paddingLeft={3}>
-            <Text bold color="cyan">{props.token}</Text>
-            <Text dimColor>   port {props.port}</Text>
+          <Box flexDirection="column" paddingLeft={3}>
+            <Box>
+              <Text bold color="cyan">{props.token}</Text>
+              <Text dimColor>   port {props.port}</Text>
+            </Box>
+            <Text dimColor>select it with the mouse to copy (some terminals need Shift held)</Text>
           </Box>
-          <Text dimColor>This screen updates by itself once the browser connects.</Text>
+          <Box flexDirection="column">
+            <Box gap={1}>
+              <Spinner color="yellow" />
+              <Text dimColor>Waiting for the browser: this can take up to 30 seconds.</Text>
+            </Box>
+            <Text dimColor>  Clicking the extension icon connects it right away.</Text>
+          </Box>
         </Box>
       );
     case 'logged-out':

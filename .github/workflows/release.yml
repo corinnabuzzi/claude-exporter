@@ -1,5 +1,5 @@
-# Push a tag like v0.1.0 → tests run, then a draft GitHub release gets the binaries,
-# the extension packages, the source archive and checksums. Review the draft, then publish it.
+# Push a tag like v0.1.0 → tests, binaries for every platform, each one actually launched on its own
+# system, macOS builds signed, then a draft GitHub release with checksums. Review the draft, then publish.
 name: release
 
 on:
@@ -10,7 +10,7 @@ permissions:
   contents: write
 
 jobs:
-  release:
+  build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -35,6 +35,9 @@ jobs:
             fi
           done
 
+      - name: LICENSE exists (the AUR package installs it)
+        run: test -f LICENSE
+
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
@@ -46,13 +49,90 @@ jobs:
         working-directory: companion
         run: bun build.ts --all
 
-      - name: Checksums
+      - name: The Linux binary runs
+        run: test "$(dist/claude-exporter-linux-x64 --version)" = "${GITHUB_REF_NAME#v}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: binaries
+          path: dist/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: extension
+          path: extension/release/
+
+  # cross-compiled macOS binaries: the Intel one carries Bun's original, now invalid signature,
+  # which macOS treats as "damaged". Re-sign both ad-hoc on a real Mac.
+  macos:
+    needs: build
+    runs-on: macos-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: binaries
+          path: dist
+
+      - name: Ad-hoc sign
+        run: |
+          for f in dist/claude-exporter-darwin-*; do
+            codesign --remove-signature "$f" || true
+            codesign --force --sign - "$f"
+            codesign --verify --strict --verbose=2 "$f"
+          done
+
+      - name: The Apple Silicon binary runs
+        run: |
+          chmod +x dist/claude-exporter-darwin-arm64
+          test "$(dist/claude-exporter-darwin-arm64 --version)" = "${GITHUB_REF_NAME#v}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-signed
+          path: dist/claude-exporter-darwin-*
+
+  windows:
+    needs: build
+    runs-on: windows-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: binaries
+          path: dist
+
+      - name: The Windows binary runs
+        shell: bash
+        run: test "$(dist/claude-exporter-windows-x64.exe --version | tr -d '\r')" = "${GITHUB_REF_NAME#v}"
+
+  release:
+    needs: [build, macos, windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: binaries
+          path: binaries
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: macos-signed
+          path: macos
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: extension
+          path: extension
+
+      - name: Collect files, signed macOS builds replacing the unsigned ones
         run: |
           mkdir upload
-          cp dist/* extension/release/* upload/
-          cd upload && sha256sum * > SHA256SUMS
+          cp binaries/* extension/* upload/
+          cp -f macos/* upload/
+          # bare names, not ./names: install.sh and update.sh match on them
+          cd upload && sha256sum -- * > SHA256SUMS && cat SHA256SUMS
 
       - name: Draft release
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: gh release create "$GITHUB_REF_NAME" upload/* --draft --title "$GITHUB_REF_NAME" --generate-notes

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import { Box, Text, useApp, useInput, useWindowSize } from 'ink';
 import type { Backend } from '../backend.ts';
+import { explainRejection } from '../rejection.ts';
 import { ChatList } from './ChatList.tsx';
 import { EmptyState, type EmptyKind } from './EmptyState.tsx';
 import { Header } from './Header.tsx';
@@ -38,11 +39,26 @@ export function App({ backend, exportDelayMs = 300 }: Props) {
   const [state, dispatch] = useReducer(reducer, initialState);
   const [, refresh] = useReducer((n: number) => n + 1, 0);
   const [quitArmed, setQuitArmed] = useState(false);
+  const [rejection, setRejection] = useState<{ text: string; at: number } | null>(null);
   const loadId = useRef(0);
 
   useEffect(() => backend.subscribe(refresh), [backend]);
 
+  // a refused browser otherwise looks exactly like no browser at all
+  useEffect(
+    () =>
+      backend.onRejected(r => {
+        const text = explainRejection(r);
+        if (!text) return;
+        setRejection({ text, at: Date.now() });
+        if (backend.browsers().length) dispatch({ type: 'message', text: `✗ ${text}` });
+      }),
+    [backend]
+  );
+
   const browsers = backend.browsers();
+  // stale once any browser has connected since
+  const problem = rejection && !browsers.some(b => b.connectedAt >= rejection.at) ? rejection.text : null;
   const active = backend.active();
   const loggedIn = Boolean(active?.account);
   const shown = visible(state);
@@ -158,7 +174,7 @@ export function App({ backend, exportDelayMs = 300 }: Props) {
   });
 
   let empty: EmptyKind | null = null;
-  if (!browsers.length) empty = { kind: 'no-browser', token: backend.token, port: backend.port };
+  if (!browsers.length) empty = { kind: 'no-browser', token: backend.token, port: backend.port, problem };
   else if (!loggedIn) empty = { kind: 'logged-out', browser: active?.browser ?? 'the browser' };
   else if (state.loading && !state.chats.length) empty = { kind: 'loading', count: state.loadedCount };
   else if (state.loadError && !state.chats.length) empty = { kind: 'error', message: state.loadError };

@@ -1,0 +1,34 @@
+# Maintainer: corinnabuzzi <https://github.com/corinnabuzzi>
+
+pkgname=claude-exporter-bin
+_name=claude-exporter
+pkgver=0.1.0
+pkgrel=1
+pkgdesc='Export your claude.ai chats to Markdown, with the files Claude made (needs the Chat Exporter for Claude browser extension)'
+arch=('x86_64' 'aarch64')
+url='https://github.com/corinnabuzzi/claude-exporter'
+license=('MIT')
+provides=("$_name")
+conflicts=("$_name")
+# Never remove !strip. The program is appended to the Bun runtime inside the binary: strip deletes it,
+# and the package then ships bare Bun (`claude-exporter --version` prints Bun's version). Stripping happens
+# after check(), so nothing in this file can catch it.
+options=('!strip' '!debug')
+source=("LICENSE-$pkgver::$url/raw/v$pkgver/LICENSE")
+source_x86_64=("$_name-$pkgver-x86_64::$url/releases/download/v$pkgver/$_name-linux-x64")
+source_aarch64=("$_name-$pkgver-aarch64::$url/releases/download/v$pkgver/$_name-linux-arm64")
+# filled in by update.sh from the release's SHA256SUMS
+sha256sums=('0000000000000000000000000000000000000000000000000000000000000000')
+sha256sums_x86_64=('0000000000000000000000000000000000000000000000000000000000000000')
+sha256sums_aarch64=('0000000000000000000000000000000000000000000000000000000000000000')
+
+check() {
+  chmod +x "$_name-$pkgver-$CARCH"
+  # the download is our program at this version, and it runs on this machine
+  [[ "$("./$_name-$pkgver-$CARCH" --version)" == "$pkgver" ]]
+}
+
+package() {
+  install -Dm755 "$_name-$pkgver-$CARCH" "$pkgdir/usr/bin/$_name"
+  install -Dm644 "LICENSE-$pkgver" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

@@ -1,20 +1,23 @@
 // Full pipeline: built extension in Chromium ⇄ real CLI, against a fake claude.ai
 // that serves a real conversation. Not part of `npm test`: needs Playwright + Chromium.
-//   npm run build -w extension && node e2e/extension.e2e.ts
+//   npm run e2e
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
+import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { mkdtemp, readFile, readdir } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { chromium, type Route } from 'playwright';
+import { chromium, type Page, type Route } from 'playwright';
 import { exportConversation, type Conversation } from '@claude-exporter/core';
+import { CloseCode, mismatchReason } from '@claude-exporter/protocol';
 
 const root = new URL('../', import.meta.url).pathname;
 const fixtures = join(root, 'core/test/fixtures/private');
 const EXT = join(root, 'extension/dist/chrome');
 const PORT = 47901;
 const ORG = '11111111-2222-3333-4444-555555555555';
+const { WebSocketServer } = createRequire(join(root, 'companion/package.json'))('ws') as typeof import('ws');
 
 if (!existsSync(join(fixtures, 'imparare-c.json'))) {
   console.log('skipped: private fixtures missing');
@@ -29,14 +32,26 @@ const summaries = [
 
 const tmp = await mkdtemp(join(tmpdir(), 'claude-exporter-e2e-'));
 const out = join(tmp, 'out');
+const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
-// ---- companion
-const cli = spawn('node', [join(root, 'companion/src/repl.ts'), '--port', String(PORT), '--out', out], {
-  env: { ...process.env, XDG_CONFIG_HOME: join(tmp, 'config') }
-});
+// ---- companion: started more than once, so each run gets its own log
+let cli: ChildProcessWithoutNullStreams;
 let log = '';
-cli.stdout.on('data', d => (log += d));
-cli.stderr.on('data', d => (log += d));
+
+function startCli(): void {
+  log = '';
+  cli = spawn('node', [join(root, 'companion/src/repl.ts'), '--port', String(PORT), '--out', out], {
+    env: { ...process.env, XDG_CONFIG_HOME: join(tmp, 'config') }
+  });
+  cli.stdout.on('data', d => (log += d));
+  cli.stderr.on('data', d => (log += d));
+}
+
+async function stopCli(): Promise<void> {
+  if (cli.exitCode !== null) return;
+  cli.stdin.write('quit\n');
+  await new Promise(resolve => cli.once('exit', resolve));
+}
 
 async function waitFor(pattern: RegExp, timeout = 15_000): Promise<string> {
   const start = Date.now();
@@ -44,14 +59,16 @@ async function waitFor(pattern: RegExp, timeout = 15_000): Promise<string> {
     const clean = log.replace(/\x1b\[[0-9;]*[A-Za-z]/g, '');
     const match = clean.match(pattern);
     if (match) return match[0];
-    await new Promise(r => setTimeout(r, 100));
+    await sleep(100);
   }
   throw new Error(`timed out waiting for ${pattern}\n--- log ---\n${log}`);
 }
 
+const send = (line: string) => cli.stdin.write(`${line}\n`);
+
+startCli();
 const token = (await waitFor(/pairing token: [0-9a-f]{32}/)).split(': ')[1] ?? '';
 assert.match(token, /^[0-9a-f]{32}$/);
-const send = (line: string) => cli.stdin.write(`${line}\n`);
 
 // ---- browser with the built extension, logged in to a fake claude.ai
 const context = await chromium.launchPersistentContext(join(tmp, 'profile'), {
@@ -86,7 +103,20 @@ const page = await context.newPage();
 await page.goto('https://claude.ai/new');
 
 const sw = context.serviceWorkers()[0] ?? (await context.waitForEvent('serviceworker'));
-await sw.evaluate(([t, p]) => chrome.storage.local.set({ token: t, port: p }), [token, PORT] as const);
+const extensionId = new URL(sw.url()).host;
+const setStorage = (values: Record<string, unknown>) =>
+  sw.evaluate(v => chrome.storage.local.set(v), values);
+await setStorage({ token, port: PORT });
+
+// opens the popup like a click on the icon would, and reads what it says
+async function popupSays(): Promise<{ label: string; detail: string; popup: Page }> {
+  const popup = await context.newPage();
+  await popup.goto(`chrome-extension://${extensionId}/popup.html`);
+  await sleep(1_500);
+  const label = (await popup.locator('#label').textContent()) ?? '';
+  const detail = (await popup.locator('#detail').textContent()) ?? '';
+  return { label, detail, popup };
+}
 
 let failures = 0;
 async function check(name: string, fn: () => Promise<void>): Promise<void> {
@@ -141,8 +171,69 @@ await check('the program sees the browser in "browsers"', async () => {
   await waitFor(/→ chrome \[[0-9a-f]+\] \(not logged in\) · extension 0\.1\.0/);
 });
 
-send('quit');
+await check('a wrong token is explained on both sides', async () => {
+  await setStorage({ token: 'f'.repeat(32) });
+  await waitFor(/! rejected: chrome tried to connect with a different pairing token/);
+  const { label, detail, popup } = await popupSays();
+  await popup.close();
+  assert.equal(label, 'Pairing token rejected');
+  assert.match(detail, /copy it again from the program/);
+
+  await setStorage({ token });
+  await waitFor(/\+ browser connected: chrome/);
+});
+
+await check('after the program restarts, the extension is back within the 5 s retry cap', async () => {
+  await stopCli();
+  await sleep(3_000);
+  startCli();
+  const started = Date.now();
+  await waitFor(/\+ browser connected: chrome/, 10_000);
+  const took = Date.now() - started;
+  assert.ok(took < 7_000, `took ${took} ms`);
+  console.log(`  (reconnected in ${(took / 1000).toFixed(1)} s)`);
+});
+
+// a stand-in program that refuses with a given protocol, like an older or newer release would
+async function withMismatch(protocol: number, fn: () => Promise<void>): Promise<void> {
+  const server = new WebSocketServer({ host: '127.0.0.1', port: PORT });
+  server.on('connection', ws => ws.once('message', () => ws.close(CloseCode.ProtocolMismatch, mismatchReason(protocol))));
+  try {
+    await fn();
+  } finally {
+    for (const ws of server.clients) ws.terminate();
+    await new Promise(resolve => server.close(resolve));
+  }
+}
+
+await check('a version mismatch tells the user which side to update', async () => {
+  await stopCli();
+
+  await withMismatch(0, async () => {
+    const { label, detail, popup } = await popupSays();
+    await popup.close();
+    assert.equal(label, 'Update needed');
+    assert.match(detail, /program is older than this extension/);
+  });
+
+  await withMismatch(99, async () => {
+    const { detail, popup } = await popupSays();
+    await popup.close();
+    assert.match(detail, /extension is older than the program/);
+  });
+});
+
+await check('opening the popup reconnects at once, even after a refusal', async () => {
+  startCli();
+  await waitFor(/listening/);
+  const started = Date.now();
+  const { popup } = await popupSays();
+  await waitFor(/\+ browser connected: chrome/, 5_000);
+  await popup.close();
+  console.log(`  (connected ${((Date.now() - started) / 1000).toFixed(1)} s after opening the popup)`);
+});
+
+await stopCli();
 await context.close();
-cli.kill();
 console.log(failures ? `\n${failures} failed` : '\nall passed');
 process.exit(failures ? 1 : 0);

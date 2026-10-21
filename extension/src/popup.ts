@@ -62,6 +62,7 @@ async function init(): Promise<void> {
   $<HTMLInputElement>('port').value = String(typeof stored.port === 'number' ? stored.port : DEFAULT_PORT);
   $<HTMLInputElement>('token').value = typeof stored.token === 'string' ? stored.token : '';
   await refreshPermission();
+  await chrome.runtime.sendMessage({ type: 'wake' }).catch(() => {});
   await refreshStatus();
   setInterval(() => void refreshStatus(), 1_000);
 }

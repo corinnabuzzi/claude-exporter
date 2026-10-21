@@ -1,5 +1,5 @@
 import type { ConversationSummary, Conversation } from '@claude-exporter/core';
-import type { BrowserInfo, Hub } from './hub.ts';
+import type { BrowserInfo, Hub, Rejection } from './hub.ts';
 import { listConversations } from './list.ts';
 import { writeExport, type WrittenExport } from './write.ts';
 
@@ -13,6 +13,7 @@ export interface Backend {
   use(id: string): boolean;
   // called on any browser connect, disconnect or login change
   subscribe(listener: () => void): () => void;
+  onRejected(listener: (rejection: Rejection) => void): () => void;
   list(options?: { max?: number; onProgress?: (count: number) => void }): Promise<ConversationSummary[]>;
   exportOne(conversationId: string): Promise<WrittenExport>;
 }
@@ -40,6 +41,11 @@ export function createBackend(hub: Hub, { token, outDir }: BackendOptions): Back
         hub.off('disconnected', listener);
         hub.off('account', listener);
       };
+    },
+
+    onRejected(listener) {
+      hub.on('rejected', listener);
+      return () => hub.off('rejected', listener);
     },
 
     async list(options = {}) {

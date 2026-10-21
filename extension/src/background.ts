@@ -4,6 +4,7 @@ import {
   PROTOCOL_VERSION,
   UUID_RE,
   parseMessage,
+  parseMismatchReason,
   type Account,
   type ErrorCode,
   type ExtensionMessage,
@@ -16,6 +17,8 @@ const CONVERSATION_QUERY = 'tree=true&rendering_mode=messages&render_all_tools=t
 const BROWSER = navigator.userAgent.includes('Firefox') ? 'firefox' : 'chrome';
 const PING_INTERVAL = 20_000;
 const MAX_PAGE = 100;
+// while the worker is awake; once the browser suspends it, only the 30 s alarm or the popup wake it
+const MAX_RETRY_DELAY = 5_000;
 
 export type State = 'idle' | 'connecting' | 'connected' | 'offline' | 'rejected' | 'outdated';
 
@@ -89,24 +92,34 @@ async function connect(): Promise<void> {
         account
       });
     sock.onmessage = e => void onMessage(sock, String(e.data));
-    sock.onclose = e => onClose(sock, e.code);
+    sock.onclose = e => onClose(sock, e.code, e.reason);
   } finally {
     starting = false;
   }
 }
 
-function onClose(sock: WebSocket, code: number): void {
+function onClose(sock: WebSocket, code: number, reason: string): void {
   if (ws !== sock) return;
   ws = null;
   clearInterval(pingTimer);
 
-  if (code === CloseCode.BadToken) return setState('rejected', 'the program rejected the pairing token');
-  if (code === CloseCode.ProtocolMismatch) return setState('outdated', 'extension and program versions don\'t match');
+  if (code === CloseCode.BadToken) {
+    return setState('rejected', 'the token doesn\'t match: copy it again from the program');
+  }
+  if (code === CloseCode.ProtocolMismatch) {
+    const theirs = parseMismatchReason(reason);
+    return setState(
+      'outdated',
+      theirs !== null && theirs < PROTOCOL_VERSION
+        ? 'the program is older than this extension: download the latest program'
+        : 'this extension is older than the program: update it'
+    );
+  }
   setState('offline', state === 'connected' ? 'connection lost' : 'program not running');
 
   // timers die with the service worker; the alarm covers that case
   retryTimer = setTimeout(() => void connect(), retryDelay);
-  retryDelay = Math.min(retryDelay * 2, 30_000);
+  retryDelay = Math.min(retryDelay * 2, MAX_RETRY_DELAY);
 }
 
 function reconnect(): void {
@@ -243,6 +256,14 @@ chrome.runtime.onMessage.addListener((msg: { type?: string }, _sender, reply) =>
   }
   if (msg.type === 'reconnect') {
     reconnect();
+    reply({ ok: true });
+  }
+  // the popup opening is the user saying "now": skip whatever backoff or alarm is pending
+  if (msg.type === 'wake') {
+    if (!ws) {
+      retryDelay = 1_000;
+      void connect();
+    }
     reply({ ok: true });
   }
   return false;
