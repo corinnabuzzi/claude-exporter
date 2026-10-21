@@ -1,6 +1,6 @@
 pkgbase = claude-exporter-bin
 	pkgdesc = Export your claude.ai chats to Markdown, with the files Claude made (needs the Chat Exporter for Claude browser extension)
-	pkgver = 0.1.1
+	pkgver = 0.2.0
 	pkgrel = 1
 	url = https://github.com/corinnabuzzi/claude-exporter
 	arch = x86_64
@@ -10,11 +10,11 @@ pkgbase = claude-exporter-bin
 	conflicts = claude-exporter
 	options = !strip
 	options = !debug
-	source = LICENSE-0.1.1::https://github.com/corinnabuzzi/claude-exporter/raw/v0.1.1/LICENSE
+	source = LICENSE-0.2.0::https://github.com/corinnabuzzi/claude-exporter/raw/v0.2.0/LICENSE
 	sha256sums = 7aa05e61ffb8af612d2db1ba6868871f2b96ace66cc03a6386e798da88d970f3
-	source_x86_64 = claude-exporter-0.1.1-x86_64::https://github.com/corinnabuzzi/claude-exporter/releases/download/v0.1.1/claude-exporter-linux-x64
-	sha256sums_x86_64 = da0e068540bfdcf0a34ee2d2f661cb6925446b951738b82e82947e53d74f1b47
-	source_aarch64 = claude-exporter-0.1.1-aarch64::https://github.com/corinnabuzzi/claude-exporter/releases/download/v0.1.1/claude-exporter-linux-arm64
-	sha256sums_aarch64 = b2dcc9d48c821904c63beef7d2195b0fb87eaaf7f32901511f60b34f66aeaeb4
+	source_x86_64 = claude-exporter-0.2.0-x86_64::https://github.com/corinnabuzzi/claude-exporter/releases/download/v0.2.0/claude-exporter-linux-x64
+	sha256sums_x86_64 = 7d4f7581915aef37651aa547e6d71cb92f0fff692d77ba177f5b988aa6f0e0ef
+	source_aarch64 = claude-exporter-0.2.0-aarch64::https://github.com/corinnabuzzi/claude-exporter/releases/download/v0.2.0/claude-exporter-linux-arm64
+	sha256sums_aarch64 = 68604e52d65e681f9663957a015e314bad5fc50ba20ae94f6c9e25000acaa7cb
 
 pkgname = claude-exporter-bin

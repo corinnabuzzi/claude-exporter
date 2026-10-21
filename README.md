@@ -43,8 +43,17 @@ unknown publisher: "More info" → "Run anyway".
 
 ### 2. The extension
 
-From the Chrome Web Store or Firefox Add-ons (links once published). Until then, see *Development* below to
-load it by hand.
+**Firefox:** install it from
+[Firefox Add-ons](https://addons.mozilla.org/en-US/firefox/addon/chat-exporter-claude/). It updates by itself.
+
+**Chrome:** not in the Chrome Web Store yet, so load it by hand:
+
+1. Download `claude-exporter-chrome-<version>.zip` from
+   [Releases](https://github.com/corinnabuzzi/claude-exporter/releases) and unzip it into a folder.
+2. Go to `chrome://extensions`, switch on **Developer mode**, click **Load unpacked**, and pick that folder.
+
+An extension loaded by hand doesn't update itself: repeat these steps when a new version comes out. The popup
+tells you when the extension and the program don't match.
 
 ### 3. Pair them, once
 
