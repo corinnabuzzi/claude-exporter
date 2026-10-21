@@ -10,7 +10,7 @@ interface Props {
 export function Header({ browsers, activeId }: Props) {
   return (
     <Box justifyContent="space-between">
-      <Text bold>claude-exporter</Text>
+      <Text bold>Chat Exporter for Claude</Text>
       <Box gap={2}>
         {browsers.length === 0 && <Text color="yellow">○ no browser</Text>}
         {browsers.map(b => {

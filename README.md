@@ -1,4 +1,4 @@
-# claude-exporter
+# Chat Exporter for Claude
 
 Export claude.ai conversations to Markdown, with the files Claude produced saved in their final versions.
 
@@ -10,7 +10,7 @@ Not affiliated with or endorsed by Anthropic.
 
 ## Install
 
-1. **The program**: download the file for your system from the [Releases](../../releases) page and make it
+1. **The program**: download the file for your system from the [Releases](https://github.com/corinnabuzzi/claude-exporter/releases) page and make it
    executable (`chmod +x claude-exporter-linux-x64`). Check it against `SHA256SUMS` if you like.
    - macOS: the binary isn't signed, so the first launch is blocked. Run
      `xattr -d com.apple.quarantine claude-exporter-darwin-*` once.

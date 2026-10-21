@@ -119,7 +119,7 @@ async function shutdown(): Promise<void> {
   process.exit(0);
 }
 
-console.log('claude-exporter (line mode)');
+console.log('Chat Exporter for Claude (line mode)');
 console.log(`listening on ws://127.0.0.1:${port} · exports go to ${outDir}`);
 console.log(`pairing token: ${token}`);
 console.log('type "help" for commands\n');

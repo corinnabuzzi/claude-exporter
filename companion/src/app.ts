@@ -13,7 +13,7 @@ export interface AppContext {
 // set at build time for compiled binaries
 export const VERSION = process.env.CLAUDE_EXPORTER_VERSION ?? 'dev';
 
-const HELP = `claude-exporter ${VERSION}
+const HELP = `Chat Exporter for Claude ${VERSION}
 Export your claude.ai chats to Markdown, with the files Claude made.
 
 usage: claude-exporter [options]

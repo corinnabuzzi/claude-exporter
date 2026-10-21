@@ -5,12 +5,12 @@ Material for the Chrome Web Store and addons.mozilla.org (AMO). The packages com
 
 ## Before the first upload
 
-- **Name.** "Claude" is Anthropic's trademark. A store can reject a listing, or take it down later, when the
-  name reads as if it were official. "… for Claude" is the usual pattern for third-party tools and much safer
-  than "Claude Exporter". Suggested: **Chat Exporter for Claude**. If you rename, change `name` and
-  `default_title` in `extension/static/manifest.json`, and the labels in the popup and the TUI.
-- **Firefox add-on ID.** `GECKO_ID` in `extension/build.mjs` is permanent once published. Pick it now.
-- **Privacy policy URL.** Both stores need a public URL: link to `PRIVACY.md` in the public repository.
+- **Name: Chat Exporter for Claude.** "Claude" is Anthropic's trademark, and "… for Claude" is the usual
+  pattern for third-party tools, so the name doesn't read as official. Keep "Not affiliated with Anthropic"
+  in every description.
+- **Firefox add-on ID: `chat-exporter-for-claude@corinnabuzzi.github.io`** (`GECKO_ID` in
+  `extension/build.mjs`). Permanent once published: never change it.
+- **Privacy policy URL**, for both stores: https://github.com/corinnabuzzi/claude-exporter/blob/main/PRIVACY.md
 - **Terms.** The extension uses claude.ai's internal API, which isn't documented and isn't meant for third-party
   tools. Read Anthropic's current Consumer Terms before publishing, and check the bulk-export behaviour (the
   250 ms pause between list pages, the 300 ms between exports) is something you're comfortable defending.
@@ -26,8 +26,9 @@ Material for the Chrome Web Store and addons.mozilla.org (AMO). The packages com
 > Export your Claude conversations to clean Markdown, together with the files Claude created during the chat, in
 > their final versions.
 >
-> This extension is the browser half of Claude Exporter. It uses your existing claude.ai login to read your chat
-> list and the chats you choose, and hands them to the Claude Exporter program running on your own computer. The
+> This extension is the browser half of Chat Exporter for Claude. It uses your existing claude.ai login to read
+> your chat list and the chats you choose, and hands them to the Chat Exporter for Claude program running on your
+> own computer. The
 > program shows your chats in a searchable list, and saves each one as a folder: the conversation as Markdown, a
 > files/ folder, and the raw data.
 >
@@ -36,7 +37,7 @@ Material for the Chrome Web Store and addons.mozilla.org (AMO). The packages com
 > • Your session cookie is never read or sent anywhere
 > • Only the active version of each chat: no abandoned edits or retries
 >
-> Requires the Claude Exporter program (free, open source): [link to releases]
+> Requires the Chat Exporter for Claude program (free, open source): https://github.com/corinnabuzzi/claude-exporter/releases
 >
 > Not affiliated with or endorsed by Anthropic.
 
@@ -69,7 +70,7 @@ purposes unrelated to the single purpose, not used for creditworthiness or lendi
 The submission form has a field for notes to the reviewer. Suggested:
 
 > The extension connects to a companion program on 127.0.0.1 (WebSocket, port 47823) and does nothing useful
-> without it. To test: download the program for your platform from [releases link], run it, and paste the
+> without it. To test: download the program for your platform from https://github.com/corinnabuzzi/claude-exporter/releases, run it, and paste the
 > pairing token it shows into the extension popup. With a logged-in claude.ai session, the program then lists
 > the chats; Enter exports one.
 >

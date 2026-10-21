@@ -1,8 +1,8 @@
 # Privacy policy
 
-*Claude Exporter: browser extension and companion program. Last updated: 21 October 2026.*
+*Chat Exporter for Claude: browser extension and companion program. Last updated: 21 October 2026.*
 
-Claude Exporter is an independent project. It is not made by, affiliated with, or endorsed by Anthropic.
+Chat Exporter for Claude is an independent project. It is not made by, affiliated with, or endorsed by Anthropic.
 
 ## In short
 
@@ -20,7 +20,7 @@ no account, no analytics, and no tracking.
 
 ## Where the data goes
 
-- **Only to the Claude Exporter program on the same computer**, over a connection to `127.0.0.1` (your own
+- **Only to the Chat Exporter for Claude program on the same computer**, over a connection to `127.0.0.1` (your own
   machine). That connection only works from the extension, and only after you pair it with the program using a
   token the program shows you.
 - **Nothing is sent to the developer or to any third party.** The extension and the program contain no
@@ -42,4 +42,4 @@ Your data is not sold, shared, or used for anything other than creating the expo
 
 ## Contact
 
-Questions or concerns: open an issue in the project's repository.
+Questions or concerns: open an issue at https://github.com/corinnabuzzi/claude-exporter/issues.

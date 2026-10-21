@@ -1,5 +1,6 @@
 node_modules/
 dist/
+release/
 exports/
 
 # real conversations: personal data, never commit

@@ -7,8 +7,8 @@ const root = new URL('./', import.meta.url);
 const pkg = JSON.parse(await readFile(new URL('package.json', root), 'utf8'));
 const base = JSON.parse(await readFile(new URL('static/manifest.json', root), 'utf8'));
 
-// permanent once published on addons.mozilla.org: change it before the first upload, never after
-export const GECKO_ID = 'claude-exporter@corinnabuzzi.dev';
+// permanent on addons.mozilla.org: never change it, or Firefox treats it as a different add-on
+export const GECKO_ID = 'chat-exporter-for-claude@corinnabuzzi.github.io';
 
 const BROWSERS = {
   chrome: {

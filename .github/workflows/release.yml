@@ -1,0 +1,58 @@
+# Push a tag like v0.1.0 → tests run, then a draft GitHub release gets the binaries,
+# the extension packages, the source archive and checksums. Review the draft, then publish it.
+name: release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+
+      - name: Tag matches the package versions
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          for pkg in companion extension; do
+            version=$(node -p "require('./$pkg/package.json').version")
+            if [ "$version" != "$tag" ]; then
+              echo "::error::$pkg/package.json is $version, tag is $tag"
+              exit 1
+            fi
+          done
+
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+
+      - name: Extension packages
+        run: npm run package -w extension
+
+      - name: Binaries
+        working-directory: companion
+        run: bun build.ts --all
+
+      - name: Checksums
+        run: |
+          mkdir upload
+          cp dist/* extension/release/* upload/
+          cd upload && sha256sum * > SHA256SUMS
+
+      - name: Draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" upload/* --draft --title "$GITHUB_REF_NAME" --generate-notes
