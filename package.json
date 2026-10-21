@@ -1,0 +1,24 @@
+{
+  "name": "claude-exporter",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "protocol",
+    "core",
+    "extension",
+    "companion"
+  ],
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "build": "npm run build -w extension",
+    "start": "npm start -w companion",
+    "test": "npm test --workspaces",
+    "e2e": "npm run build && node e2e/extension.e2e.ts",
+    "typecheck": "npm run typecheck --workspaces && tsc -p e2e"
+  },
+  "devDependencies": {
+    "playwright": "1.56.0"
+  }
+}

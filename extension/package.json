@@ -1,0 +1,21 @@
+{
+  "name": "@claude-exporter/extension",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Browser side: fetches claude.ai JSON with the user's session, nothing else",
+  "scripts": {
+    "build": "node build.mjs",
+    "watch": "node build.mjs --watch",
+    "test": "node -e \"\"",
+    "typecheck": "tsc -p ."
+  },
+  "dependencies": {
+    "@claude-exporter/protocol": "0.1.0"
+  },
+  "devDependencies": {
+    "@types/chrome": "0.3.6",
+    "esbuild": "0.28.2",
+    "typescript": "7.0.2"
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "manifest_version": 3,
+  "name": "Claude Exporter",
+  "version": "0.0.0",
+  "description": "Lets the Claude Exporter program on this computer read your claude.ai chats.",
+  "permissions": ["storage", "cookies", "scripting", "alarms"],
+  "host_permissions": ["https://claude.ai/*"],
+  "background": {
+    "service_worker": "background.js",
+    "scripts": ["background.js"]
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Claude Exporter"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "claude-exporter@local",
+      "strict_min_version": "128.0"
+    }
+  }
+}

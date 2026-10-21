@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Claude Exporter</title>
+<style>
+  :root {
+    --bg: #fafaf8;
+    --text: #1a1917;
+    --muted: #6a6862;
+    --border: #d8d6ce;
+    --ok: #2e7d32;
+    --bad: #c62828;
+    --warn: #a15c00;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1e1e1c;
+      --text: #e8e6e0;
+      --muted: #a8a49c;
+      --border: #3a3a36;
+      --ok: #7fd17f;
+      --bad: #ff8a80;
+      --warn: #f0c97a;
+    }
+  }
+  body {
+    width: 280px;
+    margin: 0;
+    padding: 14px;
+    background: var(--bg);
+    color: var(--text);
+    font: 13px/1.4 system-ui, sans-serif;
+  }
+  h1 {
+    margin: 0 0 10px;
+    font-size: 14px;
+    font-weight: 600;
+  }
+  .box {
+    margin-bottom: 10px;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+  }
+  #status[data-state="connected"] { color: var(--ok); }
+  #status[data-state="rejected"],
+  #status[data-state="outdated"] { color: var(--bad); }
+  #status[data-state="offline"] { color: var(--warn); }
+  #account[data-ok="false"] { color: var(--warn); }
+  .detail {
+    display: block;
+    color: var(--muted);
+    font-size: 12px;
+  }
+  label {
+    display: block;
+    margin: 8px 0 3px;
+    color: var(--muted);
+    font-size: 12px;
+  }
+  input {
+    box-sizing: border-box;
+    width: 100%;
+    padding: 6px 8px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: transparent;
+    color: var(--text);
+    font: 12px ui-monospace, monospace;
+  }
+  button {
+    margin-top: 10px;
+    padding: 6px 12px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: transparent;
+    color: var(--text);
+    cursor: pointer;
+  }
+  #permission { color: var(--warn); }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+  <h1>Claude Exporter</h1>
+
+  <div id="permission" class="box" hidden>
+    This browser hasn't granted access to claude.ai yet.
+    <button id="grant" type="button">Grant access</button>
+  </div>
+
+  <div id="status" class="box" data-state="idle">
+    <span id="label">…</span>
+    <span id="detail" class="detail"></span>
+  </div>
+
+  <div id="account" class="box" data-ok="false">
+    <span id="account-label">…</span>
+  </div>
+
+  <form id="pairing">
+    <label for="token">Pairing token (shown by the program)</label>
+    <input id="token" autocomplete="off" spellcheck="false">
+    <label for="port">Port</label>
+    <input id="port" type="number" min="1024" max="65535">
+    <button type="submit">Save &amp; connect</button>
+  </form>
+
+  <script src="popup.js"></script>
+</body>
+</html>

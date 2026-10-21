@@ -1,0 +1,6 @@
+node_modules/
+dist/
+exports/
+
+# real conversations: personal data, never commit
+core/test/fixtures/private/
