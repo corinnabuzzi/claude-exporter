@@ -16,7 +16,7 @@ export function EmptyState(props: EmptyKind) {
         <Box flexDirection="column" gap={1} paddingLeft={2}>
           <Text color="yellow">No browser connected.</Text>
           <Box flexDirection="column">
-            <Text>1. Load the extension (extension/dist) in Chrome or Firefox</Text>
+            <Text>1. Install the Claude Exporter extension in Chrome or Firefox</Text>
             <Text>2. Open its popup and paste this pairing token:</Text>
           </Box>
           <Box paddingLeft={3}>

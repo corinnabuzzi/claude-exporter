@@ -16,7 +16,9 @@
     "start": "npm start -w companion",
     "test": "npm test --workspaces",
     "e2e": "npm run build && node e2e/extension.e2e.ts",
-    "typecheck": "npm run typecheck --workspaces && tsc -p e2e"
+    "typecheck": "npm run typecheck --workspaces && tsc -p e2e",
+    "build:binary": "cd companion && bun build.ts",
+    "package": "npm run package -w extension"
   },
   "devDependencies": {
     "playwright": "1.56.0"

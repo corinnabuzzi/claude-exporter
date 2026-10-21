@@ -12,7 +12,7 @@ import { exportConversation, type Conversation } from '@claude-exporter/core';
 
 const root = new URL('../', import.meta.url).pathname;
 const fixtures = join(root, 'core/test/fixtures/private');
-const EXT = join(root, 'extension/dist');
+const EXT = join(root, 'extension/dist/chrome');
 const PORT = 47901;
 const ORG = '11111111-2222-3333-4444-555555555555';
 

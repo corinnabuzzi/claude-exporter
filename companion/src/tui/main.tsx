@@ -4,8 +4,15 @@ import { createBackend } from '../backend.ts';
 import { App, type ExitSummary } from './App.tsx';
 
 const { hub, token, outDir } = await startApp();
-const backend = createBackend(hub, { token, outDir });
 
+// Ink needs raw keyboard input; without a terminal it would crash on the first key
+if (!process.stdin.isTTY || !process.stdout.isTTY) {
+  console.error('claude-exporter needs an interactive terminal. For scripting, use the line-mode version.');
+  await hub.close();
+  process.exit(2);
+}
+
+const backend = createBackend(hub, { token, outDir });
 const app = render(<App backend={backend} />, { alternateScreen: true });
 const summary = (await app.waitUntilExit()) as ExitSummary | undefined;
 await hub.close();
